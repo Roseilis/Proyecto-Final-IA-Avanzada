@@ -1,0 +1,90 @@
+import pandas as pd
+import customtkinter as ctk
+from tkinter import filedialog, ttk, messagebox
+from PIL import Image, ImageTk
+from transformers import pipeline, DistilBertTokenizer, DistilBertForQuestionAnswering
+
+def cargar_datos():
+    global df
+    archivo_csv = filedialog.askopenfilename()
+    if archivo_csv:
+        df = pd.read_csv(archivo_csv)
+        entrada_consulta.configure(state="normal")
+        messagebox.showinfo("Carga Exitosa", "El archivo CSV se ha cargado exitosamente.")
+
+def enviar_pregunta():
+    consulta = entrada_consulta.get()
+    df_resultados = procesar_csv(df, consulta)
+    mostrar_datos(df_resultados)
+    global resultados_df
+    resultados_df = df_resultados
+
+def mostrar_datos(df):
+    for i in tree.get_children():
+        tree.delete(i)
+    for _, fila in df.iterrows():
+        tree.insert("", "end", values=list(fila))
+
+def procesar_csv(df, consulta):
+    modelo = pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
+    resultados = []
+    for _, fila in df.iterrows():
+        contexto = " ".join([f"{col}: {val}" for col, val in fila.items()])
+        resultado = modelo(question=consulta, context=contexto)
+        fila['Respuesta'] = resultado['answer']
+        resultados.append(fila.to_dict())
+    df_resultados = pd.DataFrame(resultados)
+    return df_resultados
+
+def exportar_resultados():
+    archivo_salida = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+    if archivo_salida and resultados_df is not None:
+        resultados_df.to_csv(archivo_salida, index=False)
+        messagebox.showinfo("Guardado Exitoso", f"El archivo CSV se ha guardado exitosamente en: {archivo_salida}")
+
+ventana = ctk.CTk()
+ventana.title("Sistema de Gestión de Estudiantes")
+ventana.geometry("800x600")
+
+# Actualizar el manejo de imágenes
+imagen_logo = ctk.CTkImage(Image.open("C:\\Users\\Ralph\\Desktop\\Proyecto IA\\logo.png"), size=(100, 100))
+bienvenida = ctk.CTkLabel(ventana, text="¡Bienvenido al Sistema de Gestión Estudiantil!", font=("Arial", 20), image=imagen_logo, compound="left", padx=20)
+bienvenida.pack(pady=20)
+
+instrucciones = ctk.CTkLabel(ventana, text="1. Cargue el archivo CSV.\n2. Ingrese su consulta en el campo proporcionado.\n3. Haga clic en 'Enviar Pregunta' para ver los resultados.", font=("Arial", 14))
+instrucciones.pack(pady=10)
+
+frame_botones = ctk.CTkFrame(ventana)
+frame_botones.pack(pady=10)
+
+btn_cargar = ctk.CTkButton(frame_botones, text="Cargar CSV", command=cargar_datos)
+btn_cargar.grid(row=0, column=0, padx=5)
+
+entrada_consulta = ctk.CTkEntry(frame_botones, placeholder_text="Ingresa tu consulta aquí", state="disabled", width=300)
+entrada_consulta.grid(row=0, column=1, padx=5)
+
+btn_enviar = ctk.CTkButton(frame_botones, text="Enviar Pregunta", command=enviar_pregunta)
+btn_enviar.grid(row=0, column=2, padx=5)
+
+btn_exportar = ctk.CTkButton(frame_botones, text="Descargar Nuevo CSV", command=exportar_resultados)
+btn_exportar.grid(row=0, column=3, padx=5)
+
+style = ttk.Style()
+style.theme_use("clam")
+style.configure("Treeview",
+                background="lightgrey",
+                foreground="black",
+                rowheight=25,
+                fieldbackground="lightgrey")
+style.configure("Treeview.Heading", background="blue", foreground="white", font=("Arial", 12, "bold"))
+style.map('Treeview', background=[('selected', 'darkblue')], foreground=[('selected', 'white')])
+
+tree = ttk.Treeview(ventana, columns=("ID", "Nombre", "Edad", "Anno", "Respuesta"), show="headings", style="Treeview")
+tree.heading("ID", text="ID")
+tree.heading("Nombre", text="Nombre")
+tree.heading("Edad", text="Edad")
+tree.heading("Anno", text="Anno")
+tree.heading("Respuesta", text="Respuesta")
+tree.pack(pady=10, padx=10, expand=True, fill='both')
+
+ventana.mainloop()
